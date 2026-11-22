@@ -1,13 +1,33 @@
-<Window x:Class="MousePollingMonitor.MainWindow"
+﻿<Window x:Class="MousePollingMonitor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Mouse Polling Rate Monitor v1.0"
-        Width="600" Height="760"
-        MinWidth="520" MinHeight="640"
+        Title="Mouse Polling Rate Monitor v1.2"
+        Width="600" Height="920"
+        MinWidth="520" MinHeight="780"
         Background="#12121f"
         Foreground="#e0e0e0"
         FontFamily="Consolas"
         WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <Style x:Key="FeedbackButton" TargetType="Button">
+            <Setter Property="Background" Value="#141428"/>
+            <Setter Property="Foreground" Value="#8899bb"/>
+            <Setter Property="BorderBrush" Value="#2a2a44"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1e1e38"/>
+                    <Setter Property="Foreground" Value="#c0d0ff"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
 
     <Grid Margin="24,18,24,18">
         <Grid.RowDefinitions>
@@ -17,6 +37,7 @@
             <RowDefinition Height="60"/>     <!-- sparkline canvas -->
             <RowDefinition Height="Auto"/>   <!-- spark scale -->
             <RowDefinition Height="Auto"/>   <!-- metrics row -->
+            <RowDefinition Height="Auto"/>   <!-- suspicion score -->
             <RowDefinition Height="Auto"/>   <!-- verdict -->
             <RowDefinition Height="Auto"/>   <!-- log header -->
             <RowDefinition Height="*"/>      <!-- log list -->
@@ -25,7 +46,7 @@
         <!-- ── Header ─────────────────────────────────── -->
         <Grid Grid.Row="0" Margin="0,0,0,18">
             <StackPanel>
-                <TextBlock Text="MOUSE POLLING RATE MONITOR  v1.0"
+                <TextBlock Text="MOUSE POLLING RATE MONITOR  v1.2"
                            Foreground="#00d4d4" FontSize="14" FontWeight="Bold"/>
                 <TextBlock x:Name="txtTimerInfo"
                            Foreground="#333355" FontSize="10" Margin="0,3,0,0"/>
@@ -55,42 +76,146 @@
         <!-- ── Sparkline ──────────────────────────────── -->
         <Border Grid.Row="3" Background="#0a0a18" BorderBrush="#1c1c30" BorderThickness="1">
             <Canvas x:Name="sparkCanvas"
+                    Background="Transparent"
+                    ClipToBounds="True"
                     SizeChanged="SparkCanvas_SizeChanged"/>
         </Border>
 
         <!-- ── Spark scale label ──────────────────────── -->
         <TextBlock Grid.Row="4" x:Name="txtSparkScale"
                    Text="scale: — "
-                   Foreground="#666688" FontSize="11"
-                   HorizontalAlignment="Right"
-                   Margin="0,3,2,10"/>
+                   Foreground="#333355" FontSize="9" Margin="0,3,0,16"/>
 
         <!-- ── Metrics row ────────────────────────────── -->
         <UniformGrid Grid.Row="5" Rows="1" Columns="4" Margin="0,0,0,16">
             <StackPanel Margin="0,0,8,0">
-                <TextBlock Text="AVG HZ" Foreground="#444466" FontSize="9"/>
-                <TextBlock x:Name="txtAvgHz" Text="---"
-                           Foreground="#e0e0e0" FontSize="22" FontWeight="Bold"/>
+                <TextBlock Text="AVERAGE" Foreground="#006060" FontSize="9"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="txtAvgHz" Text="---"
+                               Foreground="White" FontSize="20" FontWeight="Bold"/>
+                    <TextBlock Text=" Hz" Foreground="#555577" FontSize="11"
+                               VerticalAlignment="Bottom" Margin="2,0,0,2"/>
+                </StackPanel>
             </StackPanel>
+
             <StackPanel Margin="0,0,8,0">
-                <TextBlock Text="STD DEV" Foreground="#444466" FontSize="9"/>
-                <TextBlock x:Name="txtStdDev" Text="---"
-                           Foreground="#e0e0e0" FontSize="22" FontWeight="Bold"/>
+                <TextBlock Text="STDEV (σ)" Foreground="#006060" FontSize="9"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="txtStdDev" Text="---"
+                               Foreground="#00e678" FontSize="20" FontWeight="Bold"/>
+                    <TextBlock Text=" ms" Foreground="#555577" FontSize="11"
+                               VerticalAlignment="Bottom" Margin="2,0,0,2"/>
+                </StackPanel>
             </StackPanel>
+
             <StackPanel Margin="0,0,8,0">
-                <TextBlock Text="BURST RATE" Foreground="#444466" FontSize="9"/>
+                <TextBlock Text="BURST RATE" Foreground="#006060" FontSize="9"/>
                 <TextBlock x:Name="txtBurstRate" Text="---"
-                           Foreground="#e0e0e0" FontSize="22" FontWeight="Bold"/>
+                           Foreground="#00e678" FontSize="20" FontWeight="Bold"/>
             </StackPanel>
+
             <StackPanel>
-                <TextBlock Text="SAMPLES" Foreground="#444466" FontSize="9"/>
+                <TextBlock Text="SAMPLES" Foreground="#006060" FontSize="9"/>
                 <TextBlock x:Name="txtSamples" Text="0"
-                           Foreground="#888899" FontSize="22" FontWeight="Bold"/>
+                           Foreground="White" FontSize="20" FontWeight="Bold"/>
             </StackPanel>
         </UniformGrid>
 
+        <!-- ── Suspicion score ────────────────────────── -->
+        <Border Grid.Row="6"
+                Background="#0a0a18" BorderBrush="#1c1c30" BorderThickness="1"
+                Padding="14,10" Margin="0,0,0,12">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="SUSPICION SCORE"
+                               Foreground="#006060" FontSize="10"/>
+                    <TextBlock x:Name="txtModelInfo"
+                               Text="model: heuristic prior · 0 labels"
+                               Foreground="#444466" FontSize="9"
+                               HorizontalAlignment="Right"/>
+                </Grid>
+                <Grid Margin="0,2,0,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                        <TextBlock x:Name="txtSuspicion" Text="--"
+                                   Foreground="#888899" FontSize="46" FontWeight="Bold"
+                                   LineHeight="50"/>
+                        <TextBlock Text="%" Foreground="#555577" FontSize="18"
+                                   Margin="4,0,0,8"/>
+                    </StackPanel>
+                    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                Margin="0,0,0,8">
+                        <TextBlock x:Name="txtCertainty" Text="certainty: --"
+                                   Foreground="#555577" FontSize="11"
+                                   HorizontalAlignment="Right"/>
+                        <TextBlock x:Name="txtPrediction" Text="PREDICTION: COLLECTING"
+                                   Foreground="#333355" FontSize="9"
+                                   HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Grid>
+                <Grid x:Name="scoreTrack" Height="8" Background="#151528"
+                      Margin="0,4,0,0" SizeChanged="ScoreTrack_SizeChanged">
+                    <Rectangle x:Name="scoreFill" HorizontalAlignment="Left"
+                               Width="0" Fill="#00e678"/>
+                </Grid>
+                <TextBlock x:Name="txtWhy"
+                           Text="Move the mouse to collect interval samples."
+                           Foreground="#444466" FontSize="9" Margin="0,6,0,0"
+                           TextWrapping="Wrap"/>
+                <TextBlock x:Name="txtFeatures"
+                           Text="features: —"
+                           Foreground="#2a2a3a" FontSize="8" Margin="0,3,0,0"
+                           TextWrapping="Wrap"/>
+
+                <!-- Sub-scores: silent aim + triggerbot + kinematics/micro-adjustments -->
+                <UniformGrid Columns="3" Margin="0,8,0,0" Rows="1">
+                    <!-- Silent Aim -->
+                    <Border Background="#0d0d1a" BorderBrush="#1a1a2a" BorderThickness="1"
+                            Padding="8,5" Margin="0,0,3,0">
+                        <StackPanel>
+                            <TextBlock Text="SILENT AIM" Foreground="#004444" FontSize="8"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                <TextBlock x:Name="txtSilentAimScore" Text="--"
+                                           Foreground="#555577" FontSize="22" FontWeight="Bold"/>
+                                <TextBlock Text="%" Foreground="#333344" FontSize="10" Margin="2,0,0,4"/>
+                            </StackPanel>
+                            <TextBlock x:Name="txtSilentAimDetail" Text="snap:--  prec:--"
+                                       Foreground="#2a2a3a" FontSize="8" Margin="0,1,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <!-- Triggerbot -->
+                    <Border Background="#0d0d1a" BorderBrush="#1a1a2a" BorderThickness="1"
+                            Padding="8,5" Margin="3,0,3,0">
+                        <StackPanel>
+                            <TextBlock Text="TRIGGERBOT" Foreground="#004444" FontSize="8"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                <TextBlock x:Name="txtTrigbotScore" Text="--"
+                                           Foreground="#555577" FontSize="22" FontWeight="Bold"/>
+                                <TextBlock Text="%" Foreground="#333344" FontSize="10" Margin="2,0,0,4"/>
+                            </StackPanel>
+                            <TextBlock x:Name="txtTrigbotDetail" Text="pause:--  reg:--"
+                                       Foreground="#2a2a3a" FontSize="8" Margin="0,1,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <!-- Kinematics & Micro-Aim -->
+                    <Border Background="#0d0d1a" BorderBrush="#1a1a2a" BorderThickness="1"
+                            Padding="8,5" Margin="3,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="MICRO-AIM / JERK" Foreground="#004444" FontSize="8"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                <TextBlock x:Name="txtKinematicsScore" Text="--"
+                                           Foreground="#555577" FontSize="22" FontWeight="Bold"/>
+                                <TextBlock Text="%" Foreground="#333344" FontSize="10" Margin="2,0,0,4"/>
+                            </StackPanel>
+                            <TextBlock x:Name="txtKinematicsDetail" Text="jerk:--  trem:--"
+                                       Foreground="#2a2a3a" FontSize="8" Margin="0,1,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+            </StackPanel>
+        </Border>
+
         <!-- ── Verdict box ────────────────────────────── -->
-        <Border Grid.Row="6" x:Name="verdictBorder"
+        <Border Grid.Row="7" x:Name="verdictBorder"
                 BorderThickness="1" CornerRadius="3"
                 Padding="16,12" Margin="0,0,0,20"
                 Background="#0d0d1e" BorderBrush="#333355">
@@ -104,20 +229,38 @@
                            Foreground="#333355"
                            FontSize="10" Margin="0,5,0,0"/>
                 <TextBlock x:Name="txtVerdictNote"
-                           Text="Natural: σ≥0.060ms  bursts&lt;10%  │  Suspicious: σ&lt;0.060ms or bursts 10-20%  │  Injection: σ≤0.015ms or bursts&gt;20%"
+                           Text="Score: 12-feature online logistic regression. Injection: burst rate, jitter CV, interval concentration, repeated intervals, movement uniformity, burst clustering. Silent aim: snap rate + return precision. Triggerbot: micro-pause rate + pause regularity (CV). Kinematics &amp; micro-adjustments: impossible jerk acceleration spikes + lack of physiological micro-tremor. Research basis: VACNet, BeCAPTCHA-Mouse, Fitts' law."
                            Foreground="#2a2a3a"
                            FontSize="8" Margin="0,6,0,0"
                            TextWrapping="Wrap"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <Button x:Name="btnNatural"
+                            Content="✓  This is my real mouse"
+                            Style="{StaticResource FeedbackButton}"
+                            Click="LabelNatural_Click"/>
+                    <Button x:Name="btnInjected"
+                            Content="✗  This is injected"
+                            Style="{StaticResource FeedbackButton}"
+                            Click="LabelInjected_Click"/>
+                    <Button x:Name="btnReset"
+                            Content="reset model"
+                            Style="{StaticResource FeedbackButton}"
+                            Click="ResetModel_Click"/>
+                </StackPanel>
+                <TextBlock x:Name="txtFeedback"
+                           Text="Feedback trains the local model via SGD. Labels stay on this PC."
+                           Foreground="#2a2a3a" FontSize="8" Margin="0,5,0,0"/>
             </StackPanel>
         </Border>
 
         <!-- ── Log section label ──────────────────────── -->
-        <TextBlock Grid.Row="7"
+        <TextBlock Grid.Row="8"
                    Text="── LOG ──"
                    Foreground="#006060" FontSize="11" Margin="0,0,0,5"/>
 
         <!-- ── Log list ───────────────────────────────── -->
-        <ListBox Grid.Row="8"
+        <ListBox Grid.Row="9"
                  x:Name="logList"
                  Background="#08080f" BorderBrush="#1a1a2e" BorderThickness="1"
                  FontSize="10" Foreground="#008844"

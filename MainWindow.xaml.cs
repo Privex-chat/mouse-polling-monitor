@@ -21,6 +21,11 @@ public partial class MainWindow : Window
     private static readonly SolidColorBrush BrushBar   = Frozen(Color.FromRgb(0, 200, 100));
     private static readonly SolidColorBrush BrushEmpty = Frozen(Color.FromRgb(25, 25, 45));
 
+    private static readonly SolidColorBrush BrushScoreNatural    = Frozen(Color.FromRgb(0, 230, 120));
+    private static readonly SolidColorBrush BrushScoreSuspicious = Frozen(Color.FromRgb(255, 215, 0));
+    private static readonly SolidColorBrush BrushScoreInjection  = Frozen(Color.FromRgb(255, 70, 70));
+    private static readonly SolidColorBrush BrushMuted           = Frozen(Color.FromRgb(51, 51, 85));
+
     private static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
     public MainWindow()
@@ -71,6 +76,7 @@ public partial class MainWindow : Window
             txtBurstRate.Text = "---";
         }
 
+        ApplyScore(s);
         ApplyVerdict(s);
         DrawSparkline(s);
 
@@ -81,31 +87,131 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── Suspicion score ──────────────────────────────────────────────────────
+
+    private void ApplyScore(EngineStats s)
+    {
+        var p = s.Prediction;
+        var ic = CultureInfo.InvariantCulture;
+
+        if (s.FilledSamples >= 2)
+        {
+            string pct = (p.Suspicion * 100).ToString("F0", ic);
+            var brush  = ScoreBrush(p.Suspicion);
+
+            txtSuspicion.Text        = pct;
+            txtSuspicion.Foreground  = brush;
+            scoreFill.Fill           = brush;
+            txtCertainty.Text        = "certainty: " +
+                                       (p.Certainty * 100).ToString("F0", ic) + "%";
+            txtPrediction.Text       = s.Verdict switch
+            {
+                Verdict.Natural    => "PREDICTION: NATURAL",
+                Verdict.Suspicious => "PREDICTION: SUSPICIOUS",
+                Verdict.Injection  => "PREDICTION: INJECTION",
+                _                  => "PREDICTION: COLLECTING"
+            };
+            txtPrediction.Foreground = brush;
+            txtWhy.Text              = p.Reason;
+            txtFeatures.Text         = FeatureLine(p.Features);
+            UpdateScoreBar(p.Suspicion);
+
+            // ── Sub-scores: Silent Aim ────────────────────────────────────────
+            double silentRaw = Math.Max(p.Features.SilentAimSnapRate,
+                                        p.Features.SilentAimReturnPrecision * p.Features.SilentAimSnapRate);
+            double silentPct = silentRaw * 100;
+            txtSilentAimScore.Text       = silentPct.ToString("F0", ic);
+            txtSilentAimScore.Foreground = ScoreBrush(silentRaw);
+            txtSilentAimDetail.Text      = string.Format(ic,
+                "snap:{0:F2}  prec:{1:F2}",
+                p.Features.SilentAimSnapRate, p.Features.SilentAimReturnPrecision);
+
+            // ── Sub-scores: Triggerbot ────────────────────────────────────────
+            double trigRaw = p.Features.TrigbotMicroPause * p.Features.TrigbotPauseRegularity;
+            double trigPct = trigRaw * 100;
+            txtTrigbotScore.Text       = trigPct.ToString("F0", ic);
+            txtTrigbotScore.Foreground = ScoreBrush(trigRaw);
+            txtTrigbotDetail.Text      = string.Format(ic,
+                "pause:{0:F2}  reg:{1:F2}",
+                p.Features.TrigbotMicroPause, p.Features.TrigbotPauseRegularity);
+
+            // ── Sub-scores: Kinematics & Micro-aim ────────────────────────────
+            double kinRaw = Math.Max(p.Features.KinematicJerk, p.Features.MicroAdjustmentDeficiency);
+            double kinPct = kinRaw * 100;
+            txtKinematicsScore.Text       = kinPct.ToString("F0", ic);
+            txtKinematicsScore.Foreground = ScoreBrush(kinRaw);
+            txtKinematicsDetail.Text      = string.Format(ic,
+                "jerk:{0:F2}  lin:{1:F2}",
+                p.Features.KinematicJerk, p.Features.MicroAdjustmentDeficiency);
+        }
+        else
+        {
+            txtSuspicion.Text        = "--";
+            txtSuspicion.Foreground  = BrushMuted;
+            txtCertainty.Text        = "certainty: --";
+            txtPrediction.Text       = "PREDICTION: COLLECTING";
+            txtPrediction.Foreground = BrushMuted;
+            txtWhy.Text              = "Move the mouse to collect interval samples.";
+            UpdateScoreBar(0);
+
+            txtSilentAimScore.Text        = "--";
+            txtSilentAimScore.Foreground  = BrushMuted;
+            txtSilentAimDetail.Text       = "snap:--  prec:--";
+            txtTrigbotScore.Text          = "--";
+            txtTrigbotScore.Foreground    = BrushMuted;
+            txtTrigbotDetail.Text         = "pause:--  reg:--";
+            txtKinematicsScore.Text       = "--";
+            txtKinematicsScore.Foreground = BrushMuted;
+            txtKinematicsDetail.Text      = "jerk:--  trem:--";
+        }
+
+        txtModelInfo.Text = p.TrainingSamples == 0
+            ? "model: heuristic prior · 0 labels"
+            : $"model: online logistic regression · {p.TrainingSamples} labels";
+    }
+
+    private void ScoreTrack_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_lastStats != null) UpdateScoreBar(_lastStats.Prediction.Suspicion);
+    }
+
+    private void UpdateScoreBar(double suspicion)
+    {
+        scoreFill.Width = Math.Clamp(suspicion, 0, 1) * scoreTrack.ActualWidth;
+    }
+
+    private static Brush ScoreBrush(double suspicion) =>
+        suspicion >= 0.80 ? BrushScoreInjection :
+        suspicion >= 0.45 ? BrushScoreSuspicious :
+                            BrushScoreNatural;
+
     // ── Verdict ──────────────────────────────────────────────────────────────
 
     private void ApplyVerdict(EngineStats s)
     {
+        string pct = (s.Prediction.Suspicion * 100).ToString("F1", CultureInfo.InvariantCulture);
+
         var (title, subtitle, fgColor, bgColor, borderColor) = s.Verdict switch
         {
-            Verdict.Natural    => ("✓  NATURAL SIGNAL",
-                                   "Physical jitter detected — real hardware input",
+            Verdict.Natural    => ("✓  LIKELY NATURAL",
+                                   $"{pct}% suspicion — physical jitter and kinematics look normal",
                                    Color.FromRgb(0, 230, 120),
                                    Color.FromRgb(0, 20, 10),
                                    Color.FromRgb(0, 80, 40)),
 
             Verdict.Suspicious => ("?  SUSPICIOUS SIGNAL",
-                                   "Abnormally low jitter or elevated burst rate",
+                                   $"{pct}% suspicion — {s.Prediction.Reason}",
                                    Color.FromRgb(255, 215, 0),
                                    Color.FromRgb(25, 18, 0),
                                    Color.FromRgb(100, 75, 0)),
 
-            Verdict.Injection  => ("!  INJECTION DETECTED",
-                                   "Pattern physically impossible on real USB hardware",
+            Verdict.Injection  => ("!  LIKELY INJECTION",
+                                   $"{pct}% suspicion — pattern rarely produced by real USB hardware",
                                    Color.FromRgb(255, 70, 70),
                                    Color.FromRgb(28, 0, 5),
                                    Color.FromRgb(120, 20, 30)),
 
-            _                  => ("…  WAITING FOR DATA",
+            _                  => ("…  COLLECTING DATA",
                                    $"Move the mouse — {s.FilledSamples}/30 samples collected",
                                    Color.FromRgb(85, 85, 119),
                                    Color.FromRgb(13, 13, 30),
@@ -173,7 +279,7 @@ public partial class MainWindow : Window
     {
         var ic = CultureInfo.InvariantCulture;
         string entry = s.FilledSamples >= 2
-            ? $"[{DateTime.Now:HH:mm:ss}]  {s.InstantHz,4} Hz  avg:{s.AvgHz.ToString("F1", ic),7}  σ:{s.StdDev.ToString("F3", ic)}ms  bursts:{(s.BurstRate * 100).ToString("F1", ic)}%  {VerdictTag(s.Verdict)}"
+            ? $"[{DateTime.Now:HH:mm:ss}] {s.InstantHz,4}Hz avg:{s.AvgHz.ToString("F0", ic),6} σ:{s.StdDev.ToString("F3", ic)} burst:{(s.BurstRate * 100).ToString("F1", ic)}% score:{(s.Prediction.Suspicion * 100).ToString("F0", ic)}% {VerdictTag(s.Verdict)}"
             : $"[{DateTime.Now:HH:mm:ss}]  collecting... ({s.FilledSamples}/30 samples)";
 
         logList.Items.Add(entry);
@@ -191,7 +297,50 @@ public partial class MainWindow : Window
         _                  => "[waiting]"
     };
 
-    // ── Color helpers ─────────────────────────────────────────────────────────
+    // ── Feedback ─────────────────────────────────────────────────────────────
+
+    private void LabelNatural_Click(object sender, RoutedEventArgs e) => LabelCurrent(false);
+    private void LabelInjected_Click(object sender, RoutedEventArgs e) => LabelCurrent(true);
+
+    private void LabelCurrent(bool injected)
+    {
+        if (!_engine.LabelCurrent(injected))
+        {
+            txtFeedback.Text = "Need at least 30 movement samples before labeling.";
+            txtFeedback.Foreground = BrushScoreSuspicious;
+            return;
+        }
+
+        txtFeedback.Text = injected
+            ? "Labeled as injected — model weights updated locally."
+            : "Labeled as natural — model weights updated locally.";
+        txtFeedback.Foreground = injected ? BrushScoreInjection : BrushScoreNatural;
+    }
+
+    private void ResetModel_Click(object sender, RoutedEventArgs e)
+    {
+        _engine.ResetModel();
+        txtFeedback.Text = "Model reset to the heuristic prior.";
+        txtFeedback.Foreground = BrushMuted;
+    }
+
+    // ── Feature display ─────────────────────────────────────────────────────
+
+    private static string FeatureLine(DetectionFeatures f)
+    {
+        var ic = CultureInfo.InvariantCulture;
+        return string.Format(ic,
+            "inj:[bst:{0:F2} jit:{1:F2} cnc:{2:F2} rep:{3:F2} unf:{4:F2} cls:{5:F2}]  " +
+            "s-aim:[snp:{6:F2} prc:{7:F2}]  t-bot:[pse:{8:F2} reg:{9:F2}]  " +
+            "kin:[jrk:{10:F2} lin:{11:F2}]",
+            f.BurstRate, f.LowJitter, f.IntervalConcentration,
+            f.RepeatedIntervals, f.MovementUniformity, f.BurstClustering,
+            f.SilentAimSnapRate, f.SilentAimReturnPrecision,
+            f.TrigbotMicroPause, f.TrigbotPauseRegularity,
+            f.KinematicJerk, f.MicroAdjustmentDeficiency);
+    }
+
+    // ── Color helpers ───────────────────────────────────────────────────────
 
     private static Brush StdDevBrush(double sd) =>
         sd <= 0.015 ? new SolidColorBrush(Color.FromRgb(255, 70, 70)) :
